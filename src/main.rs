@@ -3,7 +3,7 @@ mod weather;
 use std::path::Path;
 use std::process::ExitCode;
 
-use weather::{MockWeatherService, WeatherError, WeatherService};
+use weather::{OpenMeteoWeatherService, WeatherError, WeatherService};
 
 fn usage(bin_name: &str) -> String {
     format!("Usage: {bin_name} <location>")
@@ -24,7 +24,7 @@ fn main() -> ExitCode {
         return ExitCode::from(2);
     };
 
-    let service = MockWeatherService::new();
+    let service = OpenMeteoWeatherService::new();
 
     match service.current_temp_c(&location) {
         Ok(temp_c) => {
@@ -33,6 +33,10 @@ fn main() -> ExitCode {
         }
         Err(WeatherError::UnknownLocation(name)) => {
             eprintln!("Unknown location: {name}");
+            ExitCode::from(1)
+        }
+        Err(WeatherError::RequestFailed(msg)) => {
+            eprintln!("Weather request failed: {msg}");
             ExitCode::from(1)
         }
     }
