@@ -125,15 +125,12 @@ struct OpenMeteoCurrent {
     // depending on which variables are supported/returned.
     temperature_2m: Option<f64>,
     relative_humidity_2m: Option<f64>,
-    // Some Open-Meteo responses/discussions use this spelling variant.
-    relativehumidity_2m: Option<f64>,
 }
 
 #[derive(Debug, Deserialize)]
 struct OpenMeteoHourly {
     time: Vec<String>,
     relative_humidity_2m: Option<Vec<f64>>,
-    relativehumidity_2m: Option<Vec<f64>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -163,12 +160,12 @@ impl WeatherService for OpenMeteoWeatherService {
                 ("current_weather", "true".to_string()),
                 (
                     "current",
-                    "temperature_2m,dew_point_2m,relative_humidity_2m,relativehumidity_2m"
+                    "temperature_2m,dew_point_2m,relative_humidity_2m"
                         .to_string(),
                 ),
                 (
                     "hourly",
-                    "relative_humidity_2m,relativehumidity_2m".to_string(),
+                    "relative_humidity_2m".to_string(),
                 ),
                 ("forecast_days", "1".to_string()),
             ])
@@ -193,7 +190,7 @@ impl WeatherService for OpenMeteoWeatherService {
         let relative_humidity_percent = body
             .current
             .as_ref()
-            .and_then(|c| c.relative_humidity_2m.or(c.relativehumidity_2m))
+            .and_then(|c| c.relative_humidity_2m)
             .or_else(|| {
                 let cw_time = body.current_weather.as_ref().map(|cw| cw.time.as_str());
                 let hourly = body.hourly.as_ref()?;
@@ -205,12 +202,6 @@ impl WeatherService for OpenMeteoWeatherService {
                     .relative_humidity_2m
                     .as_ref()
                     .and_then(|vals| vals.get(idx).copied())
-                    .or_else(|| {
-                        hourly
-                            .relativehumidity_2m
-                            .as_ref()
-                            .and_then(|vals| vals.get(idx).copied())
-                    })
             })
             .ok_or_else(|| {
                 WeatherError::RequestFailed(format!(
