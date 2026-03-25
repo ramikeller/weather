@@ -6,7 +6,7 @@ use std::process::ExitCode;
 use weather::{OpenMeteoWeatherService, WeatherError, WeatherService};
 
 fn usage(bin_name: &str) -> String {
-    format!("Usage: {bin_name} <location>")
+    format!("Usage: {bin_name} <city|lat,lng>")
 }
 
 fn main() -> ExitCode {
