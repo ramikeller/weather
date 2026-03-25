@@ -109,18 +109,31 @@ fn parse_location_input(input: &str) -> Result<ParsedLocation, String> {
 #[derive(Debug, Deserialize)]
 struct OpenMeteoResponse {
     current_weather: Option<OpenMeteoCurrentWeather>,
-    current: Option<OpenMeteoInformation>,
+    current: Option<OpenMeteoCurrent>,
+    hourly: Option<OpenMeteoHourly>,
 }
 
 #[derive(Debug, Deserialize)]
 struct OpenMeteoCurrentWeather {
     temperature: f64,
+    time: String,
 }
 
 #[derive(Debug, Deserialize)]
-struct OpenMeteoInformation {
-    temperature_2m: f64,
-    relative_humidity_2m: f64,
+struct OpenMeteoCurrent {
+    // These are optional because Open-Meteo can omit some fields
+    // depending on which variables are supported/returned.
+    temperature_2m: Option<f64>,
+    relative_humidity_2m: Option<f64>,
+    // Some Open-Meteo responses/discussions use this spelling variant.
+    relativehumidity_2m: Option<f64>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OpenMeteoHourly {
+    time: Vec<String>,
+    relative_humidity_2m: Option<Vec<f64>>,
+    relativehumidity_2m: Option<Vec<f64>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -148,7 +161,16 @@ impl WeatherService for OpenMeteoWeatherService {
                 ("latitude", latitude.to_string()),
                 ("longitude", longitude.to_string()),
                 ("current_weather", "true".to_string()),
-                ("current", "temperature_2m,dew_point_2m,relative_humidity_2m".to_string()),
+                (
+                    "current",
+                    "temperature_2m,dew_point_2m,relative_humidity_2m,relativehumidity_2m"
+                        .to_string(),
+                ),
+                (
+                    "hourly",
+                    "relative_humidity_2m,relativehumidity_2m".to_string(),
+                ),
+                ("forecast_days", "1".to_string()),
             ])
             .send()
             .map_err(|e| WeatherError::RequestFailed(e.to_string()))?
@@ -163,7 +185,7 @@ impl WeatherService for OpenMeteoWeatherService {
             .current_weather
             .as_ref()
             .map(|cw| cw.temperature)
-            .or_else(|| body.current.as_ref().map(|c| c.temperature_2m))
+            .or_else(|| body.current.as_ref().and_then(|c| c.temperature_2m))
             .ok_or_else(|| {
                 WeatherError::RequestFailed("missing temperature in response".to_string())
             })?;
@@ -171,9 +193,31 @@ impl WeatherService for OpenMeteoWeatherService {
         let relative_humidity_percent = body
             .current
             .as_ref()
-            .map(|c| c.relative_humidity_2m)
+            .and_then(|c| c.relative_humidity_2m.or(c.relativehumidity_2m))
+            .or_else(|| {
+                let cw_time = body.current_weather.as_ref().map(|cw| cw.time.as_str());
+                let hourly = body.hourly.as_ref()?;
+                let idx = cw_time
+                    .and_then(|t| hourly.time.iter().position(|ht| ht == t))
+                    .unwrap_or(0);
+
+                hourly
+                    .relative_humidity_2m
+                    .as_ref()
+                    .and_then(|vals| vals.get(idx).copied())
+                    .or_else(|| {
+                        hourly
+                            .relativehumidity_2m
+                            .as_ref()
+                            .and_then(|vals| vals.get(idx).copied())
+                    })
+            })
             .ok_or_else(|| {
-                WeatherError::RequestFailed("missing relative_humidity_2m in response".to_string())
+                WeatherError::RequestFailed(format!(
+                    "missing relative humidity in response (current: {}, hourly: {})",
+                    body.current.is_some(),
+                    body.hourly.is_some()
+                ))
             })?;
 
         Ok((temp_c, relative_humidity_percent))
