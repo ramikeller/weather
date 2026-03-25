@@ -26,9 +26,14 @@ fn main() -> ExitCode {
 
     let service = OpenMeteoWeatherService::new();
 
-    match service.current_temp_c(&location) {
-        Ok(temp_c) => {
-            println!("{}: {:.1}°C", location.trim(), temp_c);
+    match service.current_temp_c_and_relative_humidity_percent(&location) {
+        Ok((temp_c, relative_humidity_percent)) => {
+            println!(
+                "{}: {:.1}°C (RH: {:.0}%)",
+                location.trim(),
+                temp_c,
+                relative_humidity_percent
+            );
             ExitCode::SUCCESS
         }
         Err(WeatherError::UnknownLocation(name)) => {

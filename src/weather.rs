@@ -7,7 +7,10 @@ pub enum WeatherError {
 }
 
 pub trait WeatherService {
-    fn current_temp_c(&self, location: &str) -> Result<f64, WeatherError>;
+    fn current_temp_c_and_relative_humidity_percent(
+        &self,
+        location: &str,
+    ) -> Result<(f64, f64), WeatherError>;
 }
 
 pub struct OpenMeteoWeatherService {
@@ -106,11 +109,18 @@ fn parse_location_input(input: &str) -> Result<ParsedLocation, String> {
 #[derive(Debug, Deserialize)]
 struct OpenMeteoResponse {
     current_weather: Option<OpenMeteoCurrentWeather>,
+    current: Option<OpenMeteoInformation>,
 }
 
 #[derive(Debug, Deserialize)]
 struct OpenMeteoCurrentWeather {
     temperature: f64,
+}
+
+#[derive(Debug, Deserialize)]
+struct OpenMeteoInformation {
+    temperature_2m: f64,
+    relative_humidity_2m: f64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -125,7 +135,10 @@ struct OpenMeteoGeocodingResult {
 }
 
 impl WeatherService for OpenMeteoWeatherService {
-    fn current_temp_c(&self, location: &str) -> Result<f64, WeatherError> {
+    fn current_temp_c_and_relative_humidity_percent(
+        &self,
+        location: &str,
+    ) -> Result<(f64, f64), WeatherError> {
         let (latitude, longitude) = self.current_lat_lng(location)?;
 
         let resp = self
@@ -146,9 +159,24 @@ impl WeatherService for OpenMeteoWeatherService {
             .json()
             .map_err(|e| WeatherError::RequestFailed(e.to_string()))?;
 
-        body.current_weather
+        let temp_c = body
+            .current_weather
+            .as_ref()
             .map(|cw| cw.temperature)
-            .ok_or_else(|| WeatherError::RequestFailed("missing current_weather".to_string()))
+            .or_else(|| body.current.as_ref().map(|c| c.temperature_2m))
+            .ok_or_else(|| {
+                WeatherError::RequestFailed("missing temperature in response".to_string())
+            })?;
+
+        let relative_humidity_percent = body
+            .current
+            .as_ref()
+            .map(|c| c.relative_humidity_2m)
+            .ok_or_else(|| {
+                WeatherError::RequestFailed("missing relative_humidity_2m in response".to_string())
+            })?;
+
+        Ok((temp_c, relative_humidity_percent))
     }
 }
 
