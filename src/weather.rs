@@ -135,6 +135,7 @@ impl WeatherService for OpenMeteoWeatherService {
                 ("latitude", latitude.to_string()),
                 ("longitude", longitude.to_string()),
                 ("current_weather", "true".to_string()),
+                ("current", "temperature_2m,dew_point_2m,relative_humidity_2m".to_string()),
             ])
             .send()
             .map_err(|e| WeatherError::RequestFailed(e.to_string()))?
