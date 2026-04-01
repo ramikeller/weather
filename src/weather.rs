@@ -51,10 +51,10 @@ impl OpenMeteoWeatherService {
             .client
             .get("https://geocoding-api.open-meteo.com/v1/search")
             .query(&[
-                ("name", location.to_string()),
-                ("count", "1".to_string()),
-                ("language", "en".to_string()),
-                ("format", "json".to_string()),
+                ("name", location),
+                ("count", "1"),
+                ("language", "en"),
+                ("format", "json"),
             ])
             .send()
             .map_err(|e| WeatherError::RequestFailed(e.to_string()))?
@@ -141,19 +141,17 @@ impl WeatherService for OpenMeteoWeatherService {
         location: &str,
     ) -> Result<(Temperature, RelativeHumidity), WeatherError> {
         let (latitude, longitude) = self.current_lat_lng(location)?;
+        let latitude_str = latitude.to_string();
+        let longitude_str = longitude.to_string();
 
         let response = self
             .client
             .get("https://api.open-meteo.com/v1/forecast")
             .query(&[
-                ("latitude", latitude.to_string()),
-                ("longitude", longitude.to_string()),
-                (
-                    "current",
-                    "temperature_2m,relative_humidity_2m"
-                        .to_string(),
-                ),
-                ("forecast_days", "1".to_string()),
+                ("latitude", latitude_str.as_str()),
+                ("longitude", longitude_str.as_str()),
+                ("current", "temperature_2m,relative_humidity_2m"),
+                ("forecast_days", "1"),
             ])
             .send()
             .map_err(|e| WeatherError::RequestFailed(e.to_string()))?
