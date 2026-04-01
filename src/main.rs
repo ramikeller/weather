@@ -11,28 +11,27 @@ fn usage(bin_name: &str) -> String {
 
 fn main() -> ExitCode {
     let mut args = std::env::args();
-    let bin_name = args
-        .next()
+    let bin_name_arg = args.next();
+    let bin_name = bin_name_arg
         .as_deref()
         .and_then(|p| Path::new(p).file_name())
         .and_then(|s| s.to_str())
-        .unwrap_or("weather")
-        .to_string();
+        .unwrap_or("weather");
 
     let Some(location) = args.next() else {
-        eprintln!("{}", usage(&bin_name));
+        eprintln!("{}", usage(bin_name));
         return ExitCode::from(2);
     };
 
     let service = OpenMeteoWeatherService::new();
 
-    match service.current_temp_c_and_relative_humidity_percent(&location) {
-        Ok((temp_c, relative_humidity_percent)) => {
+    match service.current_temperature_celsius_and_relative_humidity(&location) {
+        Ok((temperature_celsius, relative_humidity)) => {
             println!(
-                "{}: {:.1}°C (RH: {:.0}%)",
+                "{}: {:.1}°C (Relative Humidity: {:.0}%)",
                 location.trim(),
-                temp_c,
-                relative_humidity_percent
+                temperature_celsius,
+                relative_humidity
             );
             ExitCode::SUCCESS
         }

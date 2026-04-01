@@ -7,19 +7,24 @@ pub enum WeatherError {
 }
 
 pub trait WeatherService {
-    fn current_temp_c_and_relative_humidity_percent(
+    fn current_temperature_celsius_and_relative_humidity(
         &self,
         location: &str,
-    ) -> Result<(f64, f64), WeatherError>;
+    ) -> Result<(Temperature, RelativeHumidity), WeatherError>;
 }
 
 pub struct OpenMeteoWeatherService {
     client: reqwest::blocking::Client,
 }
 
+type Lat = f64;
+type Lng = f64;
+pub type Temperature = f64;
+pub type RelativeHumidity = f64;
+
 #[derive(Debug, PartialEq)]
 enum ParsedLocation {
-    Coordinates(f64, f64),
+    Coordinates(Lat, Lng),
     City,
 }
 
@@ -30,7 +35,7 @@ impl OpenMeteoWeatherService {
         }
     }
 
-    fn current_lat_lng(&self, location: &str) -> Result<(f64, f64), WeatherError> {
+    fn current_lat_lng(&self, location: &str) -> Result<(Lat, Lng), WeatherError> {
         let location = location.trim();
         match parse_location_input(location) {
             Ok(ParsedLocation::Coordinates(latitude, longitude)) => return Ok((latitude, longitude)),
@@ -90,10 +95,10 @@ fn parse_location_input(input: &str) -> Result<ParsedLocation, String> {
     }
 
     let latitude = lat_str
-        .parse::<f64>()
+        .parse::<Lat>()
         .map_err(|_| "latitude must be a number".to_string())?;
     let longitude = lng_str
-        .parse::<f64>()
+        .parse::<Lng>()
         .map_err(|_| "longitude must be a number".to_string())?;
 
     if !(-90.0..=90.0).contains(&latitude) {
@@ -115,8 +120,8 @@ struct OpenMeteoResponse {
 struct OpenMeteoCurrent {
     // These are optional because Open-Meteo can omit some fields
     // depending on which variables are supported/returned.
-    temperature_2m: Option<f64>,
-    relative_humidity_2m: Option<f64>,
+    temperature_2m: Option<Temperature>,
+    relative_humidity_2m: Option<RelativeHumidity>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -131,10 +136,10 @@ struct OpenMeteoGeocodingResult {
 }
 
 impl WeatherService for OpenMeteoWeatherService {
-    fn current_temp_c_and_relative_humidity_percent(
+    fn current_temperature_celsius_and_relative_humidity(
         &self,
         location: &str,
-    ) -> Result<(f64, f64), WeatherError> {
+    ) -> Result<(Temperature, RelativeHumidity), WeatherError> {
         let (latitude, longitude) = self.current_lat_lng(location)?;
 
         let response = self
