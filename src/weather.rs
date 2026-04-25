@@ -28,6 +28,32 @@ enum ParsedLocation {
     City,
 }
 
+#[derive(Debug, PartialEq)]
+enum ParseLocationError {
+    MissingLatitude,
+    MissingLongitude,
+    ExtraComma,
+    InvalidLatitudeNumber,
+    InvalidLongitudeNumber,
+    LatitudeOutOfRange,
+    LongitudeOutOfRange,
+}
+
+impl std::fmt::Display for ParseLocationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let msg = match self {
+            ParseLocationError::MissingLatitude => "expected latitude before comma",
+            ParseLocationError::MissingLongitude => "expected longitude after comma",
+            ParseLocationError::ExtraComma => "expected exactly one comma separating lat,lng",
+            ParseLocationError::InvalidLatitudeNumber => "latitude must be a number",
+            ParseLocationError::InvalidLongitudeNumber => "longitude must be a number",
+            ParseLocationError::LatitudeOutOfRange => "latitude must be between -90 and 90",
+            ParseLocationError::LongitudeOutOfRange => "longitude must be between -180 and 180",
+        };
+        f.write_str(msg)
+    }
+}
+
 impl OpenMeteoWeatherService {
     pub fn new() -> Self {
         Self {
@@ -73,7 +99,7 @@ impl OpenMeteoWeatherService {
     }
 }
 
-fn parse_location_input(input: &str) -> Result<ParsedLocation, String> {
+fn parse_location_input(input: &str) -> Result<ParsedLocation, ParseLocationError> {
     if !input.contains(',') {
         return Ok(ParsedLocation::City);
     }
@@ -83,29 +109,29 @@ fn parse_location_input(input: &str) -> Result<ParsedLocation, String> {
         .next()
         .map(str::trim)
         .filter(|s| !s.is_empty())
-        .ok_or_else(|| "expected latitude before comma".to_string())?;
+        .ok_or(ParseLocationError::MissingLatitude)?;
     let lng_str = parts
         .next()
         .map(str::trim)
         .filter(|s| !s.is_empty())
-        .ok_or_else(|| "expected longitude after comma".to_string())?;
+        .ok_or(ParseLocationError::MissingLongitude)?;
 
     if parts.next().is_some() {
-        return Err("expected exactly one comma separating lat,lng".to_string());
+        return Err(ParseLocationError::ExtraComma);
     }
 
     let latitude = lat_str
         .parse::<Lat>()
-        .map_err(|_| "latitude must be a number".to_string())?;
+        .map_err(|_| ParseLocationError::InvalidLatitudeNumber)?;
     let longitude = lng_str
         .parse::<Lng>()
-        .map_err(|_| "longitude must be a number".to_string())?;
+        .map_err(|_| ParseLocationError::InvalidLongitudeNumber)?;
 
     if !(-90.0..=90.0).contains(&latitude) {
-        return Err("latitude must be between -90 and 90".to_string());
+        return Err(ParseLocationError::LatitudeOutOfRange);
     }
     if !(-180.0..=180.0).contains(&longitude) {
-        return Err("longitude must be between -180 and 180".to_string());
+        return Err(ParseLocationError::LongitudeOutOfRange);
     }
 
     Ok(ParsedLocation::Coordinates(latitude, longitude))
@@ -182,7 +208,7 @@ impl WeatherService for OpenMeteoWeatherService {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_location_input, ParsedLocation};
+    use super::{parse_location_input, ParseLocationError, ParsedLocation};
 
     #[test]
     fn parses_valid_lat_lng() {
@@ -199,16 +225,16 @@ mod tests {
         assert_eq!(parsed, ParsedLocation::City);
 
         let err = parse_location_input("abc,def").expect_err("should fail");
-        assert_eq!(err, "latitude must be a number");
+        assert_eq!(err, ParseLocationError::InvalidLatitudeNumber);
     }
 
     #[test]
     fn out_of_range_coordinates_are_rejected() {
         let err = parse_location_input("95,10").expect_err("should fail");
-        assert_eq!(err, "latitude must be between -90 and 90");
+        assert_eq!(err, ParseLocationError::LatitudeOutOfRange);
 
         let err = parse_location_input("45,190").expect_err("should fail");
-        assert_eq!(err, "longitude must be between -180 and 180");
+        assert_eq!(err, ParseLocationError::LongitudeOutOfRange);
     }
 
     #[test]
